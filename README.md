@@ -1,4 +1,4 @@
-# ts-columns
+# timeseries-renderer
 
 百万点时序曲线的渲染层：环形缓冲 + 像素列栅格 + 脏区增量绘制 + 可选 WebGL2 后端。
 
@@ -6,7 +6,7 @@
 在普通机器上稳在 60fps，并且能一键回看三小时全历史。
 
 ```js
-import { createTimeSeries } from '@william-xue/ts-columns'
+import { createTimeSeries } from 'timeseries-renderer'
 
 const chart = createTimeSeries(document.getElementById('chart'), {
   series: [
@@ -29,10 +29,10 @@ chart.review()          // 回看全历史 → { ms, points, cols }
 本地引用（未发布 npm 时）：
 
 ```json
-{ "dependencies": { "@william-xue/ts-columns": "file:../ts-columns" } }
+{ "dependencies": { "timeseries-renderer": "file:../timeseries-renderer" } }
 ```
 
-或者直接 `import { createTimeSeries } from './ts-columns/src/index.js'`。
+或者直接 `import { createTimeSeries } from './timeseries-renderer/src/index.js'`。
 
 ## API
 
@@ -59,7 +59,7 @@ chart.review()          // 回看全历史 → { ms, points, cols }
 自带类型声明（`src/index.d.ts`），无需 `@types` 包：
 
 ```ts
-import createTimeSeries, { type Samples, type ReviewResult } from '@william-xue/ts-columns'
+import createTimeSeries, { type Samples, type ReviewResult } from 'timeseries-renderer'
 
 const chart = createTimeSeries(el, {
   series: [{ id: 'p', color: '#35e0c2', unit: 'MW' }],
@@ -86,7 +86,7 @@ npm run test:types     # tsc -p test/tsconfig.json（strict）
 
 ## 它和 ECharts 的差别
 
-|  | ts-columns | ECharts |
+|  | timeseries-renderer | ECharts |
 |---|---|---|
 | 100 万点回看全历史 | 10–50 ms（一次 O(n) 聚合） | 数百 ms（重建对象数组 + 全量 diff） |
 | 交互生态 | 只有十字光标读数 | tooltip / legend / dataZoom / 导出图片 / 主题 |
