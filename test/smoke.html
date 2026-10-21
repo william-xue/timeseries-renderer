@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>ts-columns · 冒烟测试</title>
+<style>
+  body { background:#0b0f14; color:#d7e2ee; font:13px ui-monospace,Menlo,monospace; padding:20px; }
+  #chart { width:900px; height:360px; border:1px solid #1e2a38; }
+  .ok { color:#35e0c2; } .bad { color:#ff5d5d; }
+  pre { white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<div id="chart"></div>
+<pre id="log">running…</pre>
+<script type="module">
+import { createTimeSeries } from '../src/index.js';
+
+const log = [];
+const results = [];
+function check(name, cond, detail) {
+  results.push({ name, ok: !!cond, detail });
+  log.push(`${cond ? 'PASS' : 'FAIL'}  ${name}${detail === undefined ? '' : '  → ' + detail}`);
+  document.getElementById('log').innerHTML =
+    log.map((l) => `<span class="${l.startsWith('PASS') ? 'ok' : 'bad'}">${l}</span>`).join('\n');
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+window.__step = 'start';
+const mulberry32 = (a) => () => {
+  a |= 0; a = (a + 0x6d2b79f5) | 0;
+  let t = Math.imul(a ^ (a >>> 15), 1 | a);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+
+function makeData(ids, total) {
+  const rnd = mulberry32(7);
+  const per = Math.floor(total / ids.length);
+  const endT = performance.now(), span = 3 * 3600 * 1000;
+  return ids.map((id) => {
+    const t = new Float64Array(per), v = new Float32Array(per);
+    for (let k = 0; k < per; k++) {
+      t[k] = endT - span + (k * span) / per;
+      v[k] = 100 + Math.sin(k / 900) * 20 + (rnd() - 0.5) * 3;
+    }
+    return { id, t, v };
+  });
+}
+
+/** 数非黑像素，验证"真的画上去了" */
+function litPixels(engine) {
+  const cv = engine.cvData;
+  if (engine.gl) {
+    const gl = engine.gl, w = cv.width, h = cv.height;
+    const buf = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    let n = 0;
+    for (let i = 0; i < buf.length; i += 4) if (buf[i] + buf[i + 1] + buf[i + 2] > 60) n++;
+    return n;
+  }
+  const d = engine.dataCtx.getImageData(0, 0, cv.width, cv.height).data;
+  let n = 0;
+  for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 60) n++;
+  return n;
+}
+
+async function runEngine(kind) {
+  const host = document.getElementById('chart');
+  host.innerHTML = '';
+  host.style.height = '360px';
+  const chart = createTimeSeries(host, {
+    engine: kind,
+    series: [
+      { id: 'a', color: '#35e0c2', amp: 20 },
+      { id: 'b', color: '#5aa9ff', amp: 20 },
+    ],
+    span: 60000,
+  });
+
+  window.__step = kind + ':load';
+  const data = makeData(['a', 'b'], 100000);
+  const loaded = chart.load(data);
+  check(`[${kind}] load 返回点数`, loaded.points === 100000, loaded.points);
+
+  // 推 40 批实时数据
+  window.__step = kind + ':push';
+  for (let i = 0; i < 10; i++) {
+    const now = performance.now();
+    chart.push([
+      { id: 'a', t: now, v: 100 + Math.sin(i / 5) * 20 },
+      { id: 'b', t: now, v: 90 + Math.cos(i / 5) * 20 },
+    ]);
+  }
+
+  const s = chart.stats();
+  check(`[${kind}] 点数增长`, s.points === 100000 + 20, s.points);
+  window.__step = kind + ':pixels';
+  const lit = litPixels(chart.engine);
+  check(`[${kind}] 曲线真的画上去了`, lit > 400, `${lit} 个亮像素`);
+
+  window.__step = kind + ':review';
+  const r = chart.review();
+  check(`[${kind}] review 返回毫秒`, typeof r.ms === 'number' && r.ms >= 0, r.ms + 'ms');
+  check(`[${kind}] 列数与画布宽度一致`, r.cols > 200, r.cols + ' 列');
+  check(`[${kind}] 回看后仍有内容`, litPixels(chart.engine) > 400, litPixels(chart.engine));
+
+  chart.dispose();
+  check(`[${kind}] dispose 不抛异常`, true);
+}
+
+// 契约检查
+function runContract() {
+  let err = null;
+  try { createTimeSeries(document.createElement('div'), { series: [] }); } catch (e) { err = e.message; }
+  check('空 series 应报错', !!err, err);
+
+  err = null;
+  try { createTimeSeries(document.createElement('div'), { series: [{ id: 'x' }] }); } catch (e) { err = e.message; }
+  check('缺 color 应报错', !!err, err);
+
+  const c = createTimeSeries(document.createElement('div'), { series: [{ id: 'x', color: '#fff' }], autoStart: false });
+  err = null;
+  try { c.push([{ id: 'nope', t: 1, v: 1 }]); } catch (e) { err = e.message; }
+  check('未知 id 应报错', !!err, err);
+  c.dispose();
+
+  // 三种输入形态都要能接受
+  const c2 = createTimeSeries(document.createElement('div'), { series: [{ id: 'x', color: '#fff' }], autoStart: false });
+  c2.load({ id: 'x', t: performance.now(), v: 1 });
+  c2.push({ id: 'x', t: performance.now(), v: 2 });
+  c2.push([{ id: 'x', t: performance.now(), v: 3 }]);
+  c2.push({ series: [{ id: 'x', t: Float64Array.of(performance.now()), v: Float32Array.of(4) }] });
+  check('三种输入形态都接受', c2.stats().points === 4, c2.stats().points);
+  c2.dispose();
+}
+
+(async () => {
+  try {
+    runContract();
+    await runEngine('canvas');
+    await runEngine('webgl');
+  } catch (e) {
+    check('运行期异常', false, e && e.stack ? e.stack.split('\n')[0] : String(e));
+  }
+  const failed = results.filter((r) => !r.ok);
+  const summary = { passed: results.length - failed.length, failed: failed.length, results };
+  window.__smoke = summary;
+  document.title = failed.length ? `FAIL ${failed.length}` : 'ALL PASS';
+  log.push(`\n${failed.length ? '❌' : '✅'} ${summary.passed}/${results.length} 通过`);
+  document.getElementById('log').innerHTML =
+    log.map((l) => `<span class="${l.startsWith('PASS') ? 'ok' : l.startsWith('FAIL') ? 'bad' : ''}">${l}</span>`).join('\n');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>ts-columns · 最小示例</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; background:#0b0f14; color:#d7e2ee; font:13px -apple-system,"PingFang SC",Arial,sans-serif; }
+  header { display:flex; align-items:center; gap:14px; padding:12px 16px; border-bottom:1px solid #1e2a38; }
+  h1 { font-size:14px; margin:0; font-weight:650; letter-spacing:.3px; }
+  .muted { color:#7f8fa3; font:11px ui-monospace,Menlo,monospace; }
+  button { background:#111823; color:#d7e2ee; border:1px solid #1e2a38; border-radius:6px; padding:7px 13px; font-size:12.5px; cursor:pointer; }
+  button.primary { background:#35e0c2; border-color:#35e0c2; color:#04120f; font-weight:650; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  #chart { position:relative; height:440px; margin:14px 16px; border:1px solid #1e2a38; border-radius:8px; overflow:hidden; background:#080c11; }
+  #out { padding:0 16px 18px; font:11.5px ui-monospace,Menlo,monospace; color:#8ea0b4; white-space:pre-wrap; }
+  .bar { margin-left:auto; display:flex; gap:8px; align-items:center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ts-columns</h1>
+  <span class="muted">百万点时序曲线 · 最小示例（本页只用 createTimeSeries 三个方法）</span>
+  <div class="bar">
+    <span class="muted" id="stat">–</span>
+    <button id="run" class="primary">启动</button>
+    <button id="review">看全历史</button>
+  </div>
+</header>
+
+<div id="chart"></div>
+<div id="out">准备中…</div>
+
+<script type="module">
+import { createTimeSeries } from '../src/index.js';
+
+const SERIES = [
+  { id: 'p',   name: '机组有功', color: '#35e0c2', unit: 'MW',   amp: 40 },
+  { id: 'q',   name: '机组无功', color: '#5aa9ff', unit: 'MVar', amp: 20 },
+  { id: 'f',   name: '系统频率', color: '#ffd166', unit: 'Hz',   amp: 0.03 },
+];
+
+const out = document.getElementById('out');
+const statEl = document.getElementById('stat');
+const log = (m) => { out.textContent = m; };
+
+// ---- 造数据（示例自带，不代表库的一部分）----
+const mulberry32 = (a) => () => {
+  a |= 0; a = (a + 0x6d2b79f5) | 0;
+  let t = Math.imul(a ^ (a >>> 15), 1 | a);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+const rnd = mulberry32(20261022);
+const HIST = 1000000, SPAN = 3 * 3600 * 1000, RATE = 400;
+
+const chart = createTimeSeries(document.getElementById('chart'), {
+  series: SERIES,
+  span: 60000,
+  onDrawn: (ts) => {
+    if (ts) chart.lastLag = performance.now() - ts;   // 端到端延迟：采样产生 → 上屏
+  },
+});
+
+// 历史回填
+const t0 = performance.now();
+const endT = performance.now();
+const per = Math.floor(HIST / SERIES.length);
+const backfill = {};
+SERIES.forEach((s, i) => {
+  const t = new Float64Array(per), v = new Float32Array(per);
+  let walk = 0;
+  for (let k = 0; k < per; k++) {
+    const tt = endT - SPAN + (k * SPAN) / per;
+    walk = walk * 0.985 + (rnd() - 0.5) * 1.2;
+    let val = 100 + Math.sin((tt / 180000) * Math.PI * 2) * s.amp + walk;
+    if (rnd() < 0.0025) val += (rnd() > 0.5 ? 1 : -1) * s.amp * (1.2 + rnd() * 2);
+    t[k] = tt; v[k] = val;
+  }
+  backfill[s.id] = { t, v };
+});
+const loaded = chart.load(Object.entries(backfill).map(([id, d]) => ({ id, t: d.t, v: d.v })));
+log(`历史已载入：${loaded.points.toLocaleString()} 点，首帧 ${loaded.loadMs.toFixed(1)}ms · ` +
+    `列数 ${chart.stats().cols}`);
+
+// 实时流
+let timer = 0, seq = 0;
+document.getElementById('run').addEventListener('click', (e) => {
+  if (timer) { clearInterval(timer); timer = 0; e.target.textContent = '启动'; return; }
+  e.target.textContent = '停止';
+  timer = setInterval(() => {
+    const now = performance.now();
+    const batch = [];
+    for (const s of SERIES) {
+      for (let k = 0; k < 3; k++) {
+        batch.push({ id: s.id, t: now - 50 + k * 16, v: 100 + Math.sin((now / 180000) * Math.PI * 2) * s.amp + (rnd() - 0.5) * 2 });
+      }
+    }
+    chart.push(batch);
+    seq++;
+  }, 50);
+});
+
+document.getElementById('review').addEventListener('click', () => {
+  const r = chart.review();
+  log(`回看全历史：${r.ms}ms · ${r.points.toLocaleString()} 点压缩成 ${r.cols} 列 · ` +
+      `再整幅重绘一次 ${chart.redraw()}ms`);
+});
+
+// 面板独立于渲染循环刷新：标签页被节流时也能看到真实状态
+setInterval(() => {
+  const st = chart.stats();
+  const lag = chart.lastLag ? ` · lag ${chart.lastLag.toFixed(1)}ms` : '';
+  statEl.textContent = `${st.points.toLocaleString()} 点 · 增量 ${st.incFrames} / 全图 ${st.fullFrames}${lag}`;
+}, 250);
+
+window.__chart = chart;   // 便于在控制台里试
+</script>
+</body>
+</html>

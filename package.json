@@ -1,0 +1,49 @@
+{
+  "name": "@william-xue/ts-columns",
+  "version": "0.1.0",
+  "description": "百万点时序曲线渲染层：环形缓冲 + 像素列栅格 + 脏区增量绘制 + 可选 WebGL2 后端",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./core/*": "./src/core/*"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "timeseries",
+    "canvas",
+    "webgl",
+    "chart",
+    "performance",
+    "realtime",
+    "industrial"
+  ],
+  "license": "MIT",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "python3 -m http.server 8766",
+    "test": "echo '打开 http://127.0.0.1:8766/test/smoke.html 跑浏览器端冒烟测试'",
+    "sync-core": "bash scripts/sync-core.sh",
+    "test:types": "npx -y -p typescript@5.6.3 tsc -p test/tsconfig.json",
+    "publish:bench": "bash scripts/publish-bench.sh"
+  },
+  "types": "./src/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/william-xue/ts-columns.git"
+  },
+  "homepage": "https://github.com/william-xue/ts-columns#readme",
+  "author": "William Xue"
+}
