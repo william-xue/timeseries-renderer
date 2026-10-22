@@ -1,6 +1,6 @@
 {
   "name": "timeseries-renderer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "百万点时序曲线渲染层：环形缓冲 + 像素列栅格 + 脏区增量绘制；Canvas 2D 与 WebGL2 双后端",
   "type": "module",
   "main": "./src/index.js",

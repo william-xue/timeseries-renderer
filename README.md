@@ -40,7 +40,55 @@ npm i timeseries-renderer
 { "dependencies": { "timeseries-renderer": "github:william-xue/timeseries-renderer" } }
 ```
 
-## API
+## 三段可复制的用法
+
+### 1. 最小：一个容器 + 一条曲线
+
+```js
+import { createTimeSeries } from 'timeseries-renderer'
+
+const chart = createTimeSeries(document.getElementById('chart'), {
+  series: [{ id: 'p', name: '机组有功', unit: 'MW', color: '#35e0c2' }],
+  span: 60_000,             // 可视窗口 60 秒
+})
+
+chart.push({ id: 'p', t: Date.now(), v: 320.5 })   // 单点就行
+```
+
+### 2. 实时流：一批一批推（最常见）
+
+```js
+const chart = createTimeSeries(el, {
+  series: [
+    { id: 'p',  color: '#35e0c2', unit: 'MW' },
+    { id: 'f',  color: '#ffd166', unit: 'Hz', amp: 0.03 },
+  ],
+  span: 60_000,
+  onDrawn: (ts) => {                 // ts = 触发这一帧的采样时刻
+    const lag = performance.now() - ts   // 端到端延迟（含排队）
+    if (lag > 100) console.warn('渲染排队了：', lag.toFixed(1), 'ms')
+  },
+})
+
+const ws = new WebSocket('wss://example.com/stream')
+ws.onmessage = (ev) => {
+  const batch = JSON.parse(ev.data)        // [{ id, t, v }, ...]
+  chart.push(batch)                        // 数组也行，内部会按 id 分组
+}
+```
+
+### 3. 历史 + 回看（工业现场的日常动作）
+
+```js
+chart.load(history)            // [{ id, t, v }, ...]，一次几万到一百万点
+const r = chart.review()       // 视窗拉到整段历史
+console.log(`成图 ${r.ms}ms，${r.points} 点压成 ${r.cols} 列`)
+chart.setViewport({ span: 60_000 })   // 再拉回 60 秒实时视图
+```
+
+用完记得 `chart.dispose()`；容器尺寸变化会自动跟着重排（内部挂了 ResizeObserver）。
+
+## API 参考
 
 | 方法 | 说明 |
 |---|---|
