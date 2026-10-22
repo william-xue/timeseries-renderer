@@ -1,5 +1,9 @@
 # timeseries-renderer
 
+[![npm](https://img.shields.io/npm/v/timeseries-renderer.svg)](https://www.npmjs.com/package/timeseries-renderer)
+[![license](https://img.shields.io/npm/l/timeseries-renderer.svg)](./LICENSE)
+[![types](https://img.shields.io/badge/types-included-blue.svg)](./src/index.d.ts)
+
 百万点时序曲线的渲染层：环形缓冲 + 像素列栅格 + 脏区增量绘制 + 可选 WebGL2 后端。
 
 它只解决"画"这一段——不取数、不管框架、不做图表类型。目标是让 100 万点、6 路信号、秒级刷新的曲线，
@@ -26,13 +30,15 @@ chart.review()          // 回看全历史 → { ms, points, cols }
 
 ## 安装
 
-本地引用（未发布 npm 时）：
-
-```json
-{ "dependencies": { "timeseries-renderer": "file:../timeseries-renderer" } }
+```bash
+npm i timeseries-renderer
 ```
 
-或者直接 `import { createTimeSeries } from './timeseries-renderer/src/index.js'`。
+自带类型，不需要 `@types/…`。也可以直接指向仓库：
+
+```json
+{ "dependencies": { "timeseries-renderer": "github:william-xue/timeseries-renderer" } }
+```
 
 ## API
 
